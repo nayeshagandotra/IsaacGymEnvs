@@ -168,7 +168,7 @@ class FrankaPickObject(BaseTask):
         self.object_pos_delta = torch.tensor(cfg["env"]["object_pos_delta"], dtype=torch.float, device=self.device)
 
         #initialize the positions of the other objects
-        
+        "hello"
         # Goal height
         self.goal_height = torch.tensor(cfg["env"]["goal_height"], dtype=torch.float, device=self.device)
 

@@ -219,7 +219,7 @@ class FrankaPickObject(BaseTask):
 
         # Create table asset
         # table_dims = gymapi.Vec3(0.6, 1.0, 0.4)
-        table_dims = gymapi.Vec3(1.5, 1.5, 0.4) #make table bigger to support multiple objects
+        table_dims = gymapi.Vec3(0.6, 1.0, 0.4) #make table bigger to support multiple objects
 
         asset_options = gymapi.AssetOptions()
         asset_options.fix_base_link = True
@@ -304,8 +304,12 @@ class FrankaPickObject(BaseTask):
         num_table_shapes = self.gym.get_asset_rigid_shape_count(table_asset)
         num_object_bodies = self.gym.get_asset_rigid_body_count(object_asset)
         num_object_shapes = self.gym.get_asset_rigid_shape_count(object_asset)
-        max_agg_bodies = num_franka_bodies + num_table_bodies + num_object_bodies
-        max_agg_shapes = num_franka_shapes + num_table_shapes + num_object_shapes
+        num_obj2_bodies = self.gym.get_asset_rigid_body_count(obj2_asset)
+        num_obj2_shapes = self.gym.get_asset_rigid_shape_count(obj2_asset)
+        num_obj3_bodies = self.gym.get_asset_rigid_body_count(obj3_asset)
+        num_obj3_shapes = self.gym.get_asset_rigid_shape_count(obj3_asset)
+        max_agg_bodies = num_franka_bodies + num_table_bodies + num_object_bodies + num_obj2_bodies + num_obj3_bodies
+        max_agg_shapes = num_franka_shapes + num_table_shapes + num_object_shapes + num_obj2_shapes + num_obj3_shapes
 
         self.frankas = []
         self.tables = []
@@ -338,7 +342,7 @@ class FrankaPickObject(BaseTask):
                 object_color = self.obj_colors[self.obj_type]
                 self.gym.set_rigid_body_color(env_ptr, object_actor, 0, gymapi.MESH_VISUAL_AND_COLLISION, object_color)
 
-            #create actors for other objects
+            # #create actors for other objects
             obj2_actor = self.gym.create_actor(env_ptr, obj2_asset, obj2_start_pose, "object2", i, 0, 0)
             obj2_color = self.obj_colors["can"]
             self.gym.set_rigid_body_color(env_ptr, obj2_actor, 0, gymapi.MESH_VISUAL_AND_COLLISION, obj2_color)

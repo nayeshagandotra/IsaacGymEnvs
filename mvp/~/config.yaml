@@ -1,7 +1,7 @@
 task:
   name: FrankaPickObject
   env:
-    numEnvs: 256
+    numEnvs: 64
     envSpacing: 1.5
     episodeLength: 500
     obj_type: banana

@@ -168,7 +168,12 @@ class FrankaPickObject(BaseTask):
         self.object_pos_delta = torch.tensor(cfg["env"]["object_pos_delta"], dtype=torch.float, device=self.device)
 
         #initialize the positions of the other objects
-        "hello"
+        self.obj2_pos_init = torch.tensor(cfg["env"]["obj2_pos_init"], dtype=torch.float, device=self.device)
+        self.obj2_pos_delta = torch.tensor(cfg["env"]["obj2_pos_delta"], dtype=torch.float, device=self.device)
+
+        self.obj3_pos_init = torch.tensor(cfg["env"]["obj3_pos_init"], dtype=torch.float, device=self.device)
+        self.obj3_pos_delta = torch.tensor(cfg["env"]["obj3_pos_delta"], dtype=torch.float, device=self.device)
+        
         # Goal height
         self.goal_height = torch.tensor(cfg["env"]["goal_height"], dtype=torch.float, device=self.device)
 
@@ -213,7 +218,9 @@ class FrankaPickObject(BaseTask):
         franka_asset = self.gym.load_asset(self.sim, asset_root, franka_asset_file, asset_options)
 
         # Create table asset
-        table_dims = gymapi.Vec3(0.6, 1.0, 0.4)
+        # table_dims = gymapi.Vec3(0.6, 1.0, 0.4)
+        table_dims = gymapi.Vec3(1.5, 1.5, 0.4) #make table bigger to support multiple objects
+
         asset_options = gymapi.AssetOptions()
         asset_options.fix_base_link = True
         table_asset = self.gym.create_box(self.sim, table_dims.x, table_dims.y, table_dims.z, asset_options)
@@ -230,6 +237,13 @@ class FrankaPickObject(BaseTask):
             object_size = 0.045
             object_asset = self.gym.create_box(self.sim, object_size, object_size, object_size, asset_options)
 
+        #create other objects
+        obj2_asset_file = self.obj_asset_files["can"]
+        obj2_asset = self.gym.load_asset(self.sim, asset_root, obj2_asset_file, asset_options)
+
+        obj3_asset_file = self.obj_asset_files["cracker_box"]
+        obj3_asset = self.gym.load_asset(self.sim, asset_root, obj3_asset_file, asset_options)
+        
         self.num_franka_bodies = self.gym.get_asset_rigid_body_count(franka_asset)
         self.num_franka_dofs = self.gym.get_asset_dof_count(franka_asset)
 
@@ -272,6 +286,17 @@ class FrankaPickObject(BaseTask):
         object_start_pose.p = gymapi.Vec3(0.5, 0.0, table_dims.z + object_offset)
         self.object_z_init = object_start_pose.p.z
 
+        #init other objects
+        obj2_offset = self.obj_offsets["can"]
+        obj2_start_pose = gymapi.Transform()
+        obj2_start_pose.p = gymapi.Vec3(0.5, 0.0, table_dims.z + obj2_offset)
+        self.obj2_z_init = obj2_start_pose.p.z
+
+        obj3_offset = self.obj_offsets["cracker_box"]
+        obj3_start_pose = gymapi.Transform()
+        obj3_start_pose.p = gymapi.Vec3(0.5, 0.0, table_dims.z + obj3_offset)
+        self.obj3_z_init = obj3_start_pose.p.z
+
         # Compute aggregate size
         num_franka_bodies = self.gym.get_asset_rigid_body_count(franka_asset)
         num_franka_shapes = self.gym.get_asset_rigid_shape_count(franka_asset)
@@ -285,6 +310,8 @@ class FrankaPickObject(BaseTask):
         self.frankas = []
         self.tables = []
         self.objects = []
+        self.obj2s = []
+        self.obj3s = []
         self.envs = []
 
         if self.obs_type == "pixels":
@@ -311,6 +338,15 @@ class FrankaPickObject(BaseTask):
                 object_color = self.obj_colors[self.obj_type]
                 self.gym.set_rigid_body_color(env_ptr, object_actor, 0, gymapi.MESH_VISUAL_AND_COLLISION, object_color)
 
+            #create actors for other objects
+            obj2_actor = self.gym.create_actor(env_ptr, obj2_asset, obj2_start_pose, "object2", i, 0, 0)
+            obj2_color = self.obj_colors["can"]
+            self.gym.set_rigid_body_color(env_ptr, obj2_actor, 0, gymapi.MESH_VISUAL_AND_COLLISION, obj2_color)
+
+            obj3_actor = self.gym.create_actor(env_ptr, obj3_asset, obj3_start_pose, "object3", i, 0, 0)
+            obj3_color = self.obj_colors["cracker_box"]
+            self.gym.set_rigid_body_color(env_ptr, obj3_actor, 0, gymapi.MESH_VISUAL_AND_COLLISION, obj3_color)
+
             self.gym.end_aggregate(env_ptr)
 
             # TODO: move up
@@ -318,6 +354,9 @@ class FrankaPickObject(BaseTask):
             self.frankas.append(franka_actor)
             self.tables.append(table_actor)
             self.objects.append(object_actor)
+            self.obj2s.append(obj2_actor)
+            self.obj3s.append(obj3_actor)
+
 
             # Set up camera
             if self.obs_type == "pixels":
@@ -351,6 +390,8 @@ class FrankaPickObject(BaseTask):
         self.env_franka_ind = self.gym.get_actor_index(env_ptr, franka_actor, gymapi.DOMAIN_ENV)
         self.env_table_ind = self.gym.get_actor_index(env_ptr, table_actor, gymapi.DOMAIN_ENV)
         self.env_object_ind = self.gym.get_actor_index(env_ptr, object_actor, gymapi.DOMAIN_ENV)
+        self.env_obj2_ind = self.gym.get_actor_index(env_ptr, obj2_actor, gymapi.DOMAIN_ENV)
+        self.env_obj3_ind = self.gym.get_actor_index(env_ptr, obj3_actor, gymapi.DOMAIN_ENV)
 
         franka_rigid_body_names = self.gym.get_actor_rigid_body_names( env_ptr, franka_actor)
         franka_arm_body_names = [name for name in franka_rigid_body_names if "link" in name]

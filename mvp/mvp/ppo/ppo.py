@@ -7,6 +7,7 @@ import math
 import time
 
 from gym.spaces import Space
+from isaacgym import gymapi
 
 import statistics
 from collections import deque
@@ -46,7 +47,7 @@ class PPO:
         device="cpu",
         sampler="sequential",
         log_dir="run",
-        is_testing=False,
+        is_testing=True,
         print_log=True,
         apply_reset=False,
         num_gpus=1
@@ -170,9 +171,14 @@ class PPO:
                     actions = self.actor_critic.act_inference(current_obs, current_states)
                     # Step the vec_environment
                     next_obs, rews, dones, infos = self.vec_env.step(actions)
+                    print(f"rewards look like {rews}")
                     next_states = self.vec_env.get_state()
                     current_obs.copy_(next_obs)
                     current_states.copy_(next_states)
+
+                    #get collision information
+                    contacts = gymapi.Gym.get_env_rigid_contacts(self.vec_env)
+                    print(f"contacts are {contacts}")
 
                     cur_reward_sum[:] += rews
                     cur_episode_length[:] += 1
@@ -192,6 +198,7 @@ class PPO:
                         print("Mean success: {:.2f}".format(statistics.mean(successes) * 100))
 
         else:
+            # print(f"here!")
             maxlen = 200
             rewbuffer = deque(maxlen=maxlen)
             lenbuffer = deque(maxlen=maxlen)
@@ -217,7 +224,12 @@ class PPO:
                         self.actor_critic.act(current_obs, current_states)
                     # Step the vec_environment
                     next_obs, rews, dones, infos = self.vec_env.step(actions)
+                    print(f"envs look like {self.vec_env}")
                     next_states = self.vec_env.get_state()
+
+                    #get collision information
+                    contacts = gymapi.Gym.get_env_rigid_contacts(self.vec_env)
+                    print(f"contacts are {contacts}")
                     # Record the transition
                     obs_in = current_obs_feats if current_obs_feats is not None else current_obs
                     self.storage.add_transitions(

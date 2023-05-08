@@ -40,11 +40,6 @@ def train(cfg: omegaconf.DictConfig):
     sim_params = parse_sim_params(cfg, cfg_dict)
     env = parse_task(cfg, cfg_dict, sim_params)
     print(f"type of env is {env}")
-    # env = RecordVideo(env, "./videos", 
-    #                               step_trigger=lambda step: step % 10000 == 0, # record the videos every 10000 steps
-	#                                 video_length=100  # for each video record up to 100 steps 
-    #         )
-    # env.reset()
 
     # Perform training
     ppo = process_ppo(env, cfg, cfg_dict, cfg.logdir, cfg.cptdir)

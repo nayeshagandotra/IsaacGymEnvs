@@ -44,6 +44,9 @@ class FrankaPickObject(BaseTask):
         self.up_axis_idx = 2
         self.dt = 1 / 60.
 
+        #for collision
+        self.collisions = []
+
         self.obj_asset_files = {
             "can": "urdf/ycb/010_potted_meat_can/010_potted_meat_can.urdf",
             "banana": "urdf/ycb/011_banana/011_banana.urdf",
@@ -99,7 +102,7 @@ class FrankaPickObject(BaseTask):
         super().__init__(cfg=self.cfg, enable_camera_sensors=(self.obs_type == "pixels"))
 
         actor_root_state_tensor = self.gym.acquire_actor_root_state_tensor(self.sim)
-        print(f"root state matrix is {actor_root_state_tensor.shape}")
+        # print(f"root state matrix is {actor_root_state_tensor.shape}")
         dof_state_tensor = self.gym.acquire_dof_state_tensor(self.sim)
         rigid_body_tensor = self.gym.acquire_rigid_body_state_tensor(self.sim)
         net_contact_forces = self.gym.acquire_net_contact_force_tensor(self.sim)
@@ -172,6 +175,8 @@ class FrankaPickObject(BaseTask):
 
         #initialize the positions of the other objects
         self.obj2_pos_init = torch.tensor(cfg["env"]["obj2_pos_init"], dtype=torch.float, device=self.device)
+        # self.obj2_pos_init = torch.tensor([0.2, 0.5], dtype=torch.float, device=self.device) #hard coding for now because it's being wierd about configs
+
         self.obj2_pos_delta = torch.tensor(cfg["env"]["obj2_pos_delta"], dtype=torch.float, device=self.device)
 
         # self.obj3_pos_init = torch.tensor(cfg["env"]["obj3_pos_init"], dtype=torch.float, device=self.device)
@@ -209,7 +214,7 @@ class FrankaPickObject(BaseTask):
         asset_root = self.cfg["env"]["asset"]["assetRoot"]
         franka_asset_file = self.cfg["env"]["asset"]["assetFileNameFranka"]
 
-        # Load franka asset
+        # Load franka /home/nayeshagandotra/nayesha/IsaacGymEnvs/mvp/assets/urdf/franka_descriptionasset
         asset_options = gymapi.AssetOptions()
         asset_options.flip_visual_attachments = True
         asset_options.fix_base_link = True
@@ -393,15 +398,17 @@ class FrankaPickObject(BaseTask):
                 cam_tensor_th = gymtorch.wrap_tensor(cam_tensor)
                 self.cam_tensors.append(cam_tensor_th)
 
+            
+
         self.rigid_body_lfinger_ind = self.gym.find_actor_rigid_body_handle(env_ptr, franka_actor, "panda_leftfinger")
         self.rigid_body_rfinger_ind = self.gym.find_actor_rigid_body_handle(env_ptr, franka_actor, "panda_rightfinger")
 
         self.env_franka_ind = self.gym.get_actor_index(env_ptr, franka_actor, gymapi.DOMAIN_ENV)
         self.env_table_ind = self.gym.get_actor_index(env_ptr, table_actor, gymapi.DOMAIN_ENV)
         self.env_object_ind = self.gym.get_actor_index(env_ptr, object_actor, gymapi.DOMAIN_ENV)
-        print(f"object1 index is {self.env_object_ind}")
+        # print(f"object1 index is {self.env_object_ind}")
         self.env_obj2_ind = self.gym.get_actor_index(env_ptr, obj2_actor, gymapi.DOMAIN_ENV)
-        print(f"obj2 index is {self.env_obj2_ind}")
+        # print(f"obj2 index is {self.env_obj2_ind}")
         # self.env_obj3_ind = self.gym.get_actor_index(env_ptr, obj3_actor, gymapi.DOMAIN_ENV)
 
         franka_rigid_body_names = self.gym.get_actor_rigid_body_names( env_ptr, franka_actor)
@@ -427,7 +434,9 @@ class FrankaPickObject(BaseTask):
         self.rfinger_grasp_rot = torch.zeros_like(self.local_finger_grasp_rot)
         self.rfinger_grasp_rot[..., 3] = 1.0
 
+
     def compute_reward(self, actions):
+    #   self.compute_collisions()
       self.rew_buf[:], self.reset_buf[:], self.successes[:] = compute_franka_reward(
             self.reset_buf, self.progress_buf, self.successes, self.actions,
             self.lfinger_grasp_pos, self.rfinger_grasp_pos, self.object_pos, self.to_height,
@@ -466,7 +475,7 @@ class FrankaPickObject(BaseTask):
 
         # Object multi env ids
         object_multi_env_ids_int32 = self.global_indices[env_ids, self.env_object_ind].flatten()
-        print(f"object i32 handle stuff is {object_multi_env_ids_int32} and {len(object_multi_env_ids_int32)}")
+        # print(f"object i32 handle stuff is {object_multi_env_ids_int32} and {len(object_multi_env_ids_int32)}")
 
         # Reset object pos
         delta_x = torch_rand_float(
@@ -542,6 +551,7 @@ class FrankaPickObject(BaseTask):
         self.obs_buf[:, self.num_franka_dofs:] = self.franka_dof_vel_scaled
 
     def compute_oracle_obs(self):
+        # self.compute_collisions()
         self.obs_buf[:] = torch.cat((
             self.franka_dof_pos_scaled, self.franka_dof_vel_scaled,
             self.lfinger_grasp_pos, self.rfinger_grasp_pos, self.object_pos,
@@ -559,6 +569,25 @@ class FrankaPickObject(BaseTask):
             self.obs_buf[i] = (self.obs_buf[i] - self.im_mean) / self.im_std
         self.gym.end_access_image_tensors(self.sim)
 
+    def compute_collisions(self):
+        """
+        Ideally this takes in the environment info of the sim and returns
+        the list of RigidContacts, which can then be used to detect collision. 
+        This should be called during the compute reward function to get
+        a collision list/matrix type thing, which can then be used to compute reward.
+
+        This function can be called after the compute observations function and the updated list
+        can be passed into the reward calculation function
+        """
+
+        #create a list of rigid contacts for each environment
+        for env in self.envs:
+            #set up collision info
+            contacts = self.gym.get_env_rigid_contacts(env)
+            print(f"env contact is {contacts}")           
+            # contacts = self.contacts[env]
+            # print(f"env contact is {contacts}")
+
     def post_physics_step(self):
         self.progress_buf += 1
 
@@ -574,6 +603,7 @@ class FrankaPickObject(BaseTask):
         self.compute_task_state()
         self.compute_robot_state()
         self.compute_observations()
+        # self.compute_collisions()
         self.compute_reward(self.actions)
 
 

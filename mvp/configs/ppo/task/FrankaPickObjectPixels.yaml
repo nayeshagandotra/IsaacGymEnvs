@@ -9,6 +9,9 @@ env:
   object_pos_init: [0.5, 0.0]
   object_pos_delta: [0.1, 0.2]
 
+  obj2_pos_init: [0.2, 0.5]
+  obj2_pos_delta: [0.1, 0.2]
+
   goal_height: 0.8
 
   obs_type: pixels

@@ -4,7 +4,7 @@ pipeline: "cpu"
 # sim_device: "cuda:0"
 # rl_device: "cuda:0"
 sim_device: "cpu"
-rl_device: "cuda:0"
+rl_device: "cpu"
 graphics_device_id: 0
 num_gpus: 1
 

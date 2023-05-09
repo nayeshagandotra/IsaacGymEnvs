@@ -98,7 +98,7 @@ train:
 physics_engine: physx
 pipeline: cpu
 sim_device: cpu
-rl_device: cuda:0
+rl_device: cpu
 graphics_device_id: 0
 num_gpus: 1
 test: false

@@ -1,7 +1,9 @@
 
 physics_engine: "physx"
-pipeline: "gpu"
-sim_device: "cuda:0"
+pipeline: "cpu"
+# sim_device: "cuda:0"
+# rl_device: "cuda:0"
+sim_device: "cpu"
 rl_device: "cuda:0"
 graphics_device_id: 0
 num_gpus: 1

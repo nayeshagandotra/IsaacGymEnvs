@@ -8,6 +8,7 @@ import time
 
 from gym.spaces import Space
 from isaacgym import gymapi
+import gym
 
 import statistics
 from collections import deque
@@ -222,16 +223,18 @@ class PPO:
                     # Compute the action
                     actions, actions_log_prob, values, mu, sigma, current_obs_feats = \
                         self.actor_critic.act(current_obs, current_states)
+                    
                     # Step the vec_environment
                     next_obs, rews, dones, infos = self.vec_env.step(actions)
-                    print(f"rews look like {rews}")
+                    # print(f"rews look like {rews}")
                     next_states = self.vec_env.get_state()
 
-                    #get collision information
-                    # contacts = gymapi.Gym.get_env_rigid_contacts(self.vec_env)
-                    contacts = self.vec_env.task.envs
-                    # print(f"contacts are {contacts}")
-                    
+                    # #get collision information
+                    # # contacts = gymapi.Gym.get_env_rigid_contacts(self.vec_env)
+                    # print(f"gym is {self.vec_env.task.gym}")
+                    # contacts = [gymapi.Gym.get_env_rigid_contacts(self.vec_env.task.gym, env) for env in self.vec_env.task.envs]
+                    # print(f"contacts are {contacts[0][0][2]}")
+
                     # Record the transition
                     obs_in = current_obs_feats if current_obs_feats is not None else current_obs
                     self.storage.add_transitions(

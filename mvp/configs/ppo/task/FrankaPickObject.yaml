@@ -1,7 +1,7 @@
 name: FrankaPickObject
 
 env:
-  numEnvs: 64
+  numEnvs: 2
   envSpacing: 1.5
   episodeLength: 500
 

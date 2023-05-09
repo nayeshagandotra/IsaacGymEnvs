@@ -404,11 +404,13 @@ class FrankaPickObject(BaseTask):
         self.rigid_body_rfinger_ind = self.gym.find_actor_rigid_body_handle(env_ptr, franka_actor, "panda_rightfinger")
 
         self.env_franka_ind = self.gym.get_actor_index(env_ptr, franka_actor, gymapi.DOMAIN_ENV)
+        print(f"franka index is {self.env_franka_ind}")
         self.env_table_ind = self.gym.get_actor_index(env_ptr, table_actor, gymapi.DOMAIN_ENV)
+        print(f"table index is {self.env_table_ind}")
         self.env_object_ind = self.gym.get_actor_index(env_ptr, object_actor, gymapi.DOMAIN_ENV)
-        # print(f"object1 index is {self.env_object_ind}")
+        print(f"object1 index is {self.env_object_ind}")
         self.env_obj2_ind = self.gym.get_actor_index(env_ptr, obj2_actor, gymapi.DOMAIN_ENV)
-        # print(f"obj2 index is {self.env_obj2_ind}")
+        print(f"obj2 index is {self.env_obj2_ind}")
         # self.env_obj3_ind = self.gym.get_actor_index(env_ptr, obj3_actor, gymapi.DOMAIN_ENV)
 
         franka_rigid_body_names = self.gym.get_actor_rigid_body_names( env_ptr, franka_actor)
@@ -417,6 +419,7 @@ class FrankaPickObject(BaseTask):
         self.rigid_body_arm_inds = torch.zeros(len(franka_arm_body_names), dtype=torch.long, device=self.device)
         for i, n in enumerate(franka_arm_body_names):
             self.rigid_body_arm_inds[i] = self.gym.find_actor_rigid_body_handle(env_ptr, franka_actor, n)
+        print(f"rigid body indices for franka arm are {self.rigid_body_arm_inds}")
 
         self.init_grasp_pose()
 
@@ -449,6 +452,7 @@ class FrankaPickObject(BaseTask):
 
         # Franka multi env ids
         franka_multi_env_ids_int32 = self.global_indices[env_ids, self.env_franka_ind].flatten()
+        print(f" franka ids are {franka_multi_env_ids_int32}")
 
         # Reset franka dofs
         dof_pos_noise = torch.rand((len(env_ids), self.num_franka_dofs), device=self.device)
@@ -475,7 +479,7 @@ class FrankaPickObject(BaseTask):
 
         # Object multi env ids
         object_multi_env_ids_int32 = self.global_indices[env_ids, self.env_object_ind].flatten()
-        # print(f"object i32 handle stuff is {object_multi_env_ids_int32} and {len(object_multi_env_ids_int32)}")
+        print(f"object i32 handle stuff is {object_multi_env_ids_int32} and {len(object_multi_env_ids_int32)}")
 
         # Reset object pos
         delta_x = torch_rand_float(
@@ -583,6 +587,7 @@ class FrankaPickObject(BaseTask):
         #create a list of rigid contacts for each environment
         for env in self.envs:
             #set up collision info
+            num_rigid_bodies = self.gym.get_env_rigid_body_count(env)
             contacts = self.gym.get_env_rigid_contacts(env)
             print(f"env contact is {contacts}")           
             # contacts = self.contacts[env]
@@ -603,7 +608,7 @@ class FrankaPickObject(BaseTask):
         self.compute_task_state()
         self.compute_robot_state()
         self.compute_observations()
-        # self.compute_collisions()
+        self.compute_collisions()
         self.compute_reward(self.actions)
 
 

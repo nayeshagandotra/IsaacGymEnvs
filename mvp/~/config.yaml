@@ -1,7 +1,7 @@
 task:
   name: FrankaPickObject
   env:
-    numEnvs: 64
+    numEnvs: 2
     envSpacing: 1.5
     episodeLength: 500
     obj_type: banana
@@ -96,8 +96,8 @@ train:
     init_noise_std: 1.0
     log_interval: 1
 physics_engine: physx
-pipeline: gpu
-sim_device: cuda:0
+pipeline: cpu
+sim_device: cpu
 rl_device: cuda:0
 graphics_device_id: 0
 num_gpus: 1

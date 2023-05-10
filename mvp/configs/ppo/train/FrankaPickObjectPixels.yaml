@@ -3,7 +3,7 @@ torch_deterministic: False
 
 encoder:
   name: vits-mae-hoi
-  pretrain_dir: "none"
+  pretrain_dir: "/tmp/pretrained"
   freeze: True
   emb_dim: 128
 

@@ -11,11 +11,6 @@ from mvp.utils.hydra_utils import set_np_formatting, set_seed
 from mvp.utils.hydra_utils import parse_sim_params, parse_task
 from mvp.utils.hydra_utils import process_ppo
 
-import isaacgym
-import gym
-from gym.wrappers import RecordVideo
-
-
 
 @hydra.main(config_name="config", config_path="../configs/ppo")
 def train(cfg: omegaconf.DictConfig):
@@ -39,7 +34,6 @@ def train(cfg: omegaconf.DictConfig):
     # Construct task
     sim_params = parse_sim_params(cfg, cfg_dict)
     env = parse_task(cfg, cfg_dict, sim_params)
-    print(f"type of env is {env}")
 
     # Perform training
     ppo = process_ppo(env, cfg, cfg_dict, cfg.logdir, cfg.cptdir)

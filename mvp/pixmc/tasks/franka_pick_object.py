@@ -7,6 +7,7 @@ import os
 import torch
 import imageio
 import random
+import time
 
 from typing import Tuple
 from torch import Tensor
@@ -16,9 +17,8 @@ from pixmc.tasks.base.base_task import BaseTask
 
 from isaacgym import gymtorch
 from isaacgym import gymapi
-import isaacgym
-import gym
-from gym.wrappers import RecordVideo
+
+random.seed(time.time())
 
 
 class FrankaPickObject(BaseTask):
@@ -44,29 +44,31 @@ class FrankaPickObject(BaseTask):
         self.up_axis_idx = 2
         self.dt = 1 / 60.
 
-        #for collision
-        self.collisions = []
-
         self.obj_asset_files = {
             "can": "urdf/ycb/010_potted_meat_can/010_potted_meat_can.urdf",
             "banana": "urdf/ycb/011_banana/011_banana.urdf",
             "mug": "urdf/ycb/025_mug/025_mug.urdf",
-            "cracker_box": "urdf/ycb/003_cracker_box/003_cracker_box.urdf",
         }
         self.obj_colors = {
             "can": gymapi.Vec3(0.6, 0.6, 0.6),
             "banana": gymapi.Vec3(0.85, 0.88, 0.2),
             "mug": gymapi.Vec3(0.635, 0.078, 0.184),
-            "cracker_box": gymapi.Vec3(0.0, 0.447, 0.741),
+            "box": gymapi.Vec3(0.0, 0.447, 0.741),
         }
         self.obj_offsets = {
             "can": 0.05,
             "banana": 0.016,
             "mug": 0.04,
-            "cracker_box": 0.0225,
+            "box": 0.0225,
         }
+        objects = ["can", "banana", "mug"]  # list of objects to select from
+        # self.obj_type = self.cfg["env"]["obj_type"]
 
-        self.obj_type = self.cfg["env"]["obj_type"]
+        # select a random object
+        selected_object = random.choice(objects)
+        print(f"Selected object: {selected_object}")
+
+        self.obj_type = selected_object
         assert self.obj_type in self.obj_offsets.keys()
 
         self.obs_type = self.cfg["env"]["obs_type"]
@@ -102,7 +104,6 @@ class FrankaPickObject(BaseTask):
         super().__init__(cfg=self.cfg, enable_camera_sensors=(self.obs_type == "pixels"))
 
         actor_root_state_tensor = self.gym.acquire_actor_root_state_tensor(self.sim)
-        # print(f"root state matrix is {actor_root_state_tensor.shape}")
         dof_state_tensor = self.gym.acquire_dof_state_tensor(self.sim)
         rigid_body_tensor = self.gym.acquire_rigid_body_state_tensor(self.sim)
         net_contact_forces = self.gym.acquire_net_contact_force_tensor(self.sim)
@@ -128,7 +129,6 @@ class FrankaPickObject(BaseTask):
 
         # (N, 3, 13)
         self.root_state_tensor = gymtorch.wrap_tensor(actor_root_state_tensor).view(self.num_envs, -1, 13)
-        print(f"root state tensor is {self.root_state_tensor.shape}")
 
         # (N, num_bodies, 3)
         self.contact_forces = gymtorch.wrap_tensor(net_contact_forces).view(self.num_envs, -1, 3)
@@ -143,14 +143,13 @@ class FrankaPickObject(BaseTask):
 
         # Object pos
         self.object_pos = self.root_state_tensor[:, self.env_object_ind, :3]
-        print(f"object position is {self.object_pos.shape}")
 
         # Dof targets
         self.dof_targets = torch.zeros((self.num_envs, self.num_franka_dofs), dtype=torch.float, device=self.device)
 
         # Global inds
         self.global_indices = torch.arange(
-            self.num_envs * 4, dtype=torch.int32, device=self.device #IMPORTANT! THIS LINE NEEDS TO BE MODIFIED TO ALLOW THE ENGINE TO RUN
+            self.num_envs * (1 + 1 + 1), dtype=torch.int32, device=self.device
         ).view(self.num_envs, -1)
 
         # Franka dof pos and vel scaled
@@ -173,15 +172,6 @@ class FrankaPickObject(BaseTask):
         self.object_pos_init = torch.tensor(cfg["env"]["object_pos_init"], dtype=torch.float, device=self.device)
         self.object_pos_delta = torch.tensor(cfg["env"]["object_pos_delta"], dtype=torch.float, device=self.device)
 
-        #initialize the positions of the other objects
-        self.obj2_pos_init = torch.tensor(cfg["env"]["obj2_pos_init"], dtype=torch.float, device=self.device)
-        # self.obj2_pos_init = torch.tensor([0.2, 0.5], dtype=torch.float, device=self.device) #hard coding for now because it's being wierd about configs
-
-        self.obj2_pos_delta = torch.tensor(cfg["env"]["obj2_pos_delta"], dtype=torch.float, device=self.device)
-
-        # self.obj3_pos_init = torch.tensor(cfg["env"]["obj3_pos_init"], dtype=torch.float, device=self.device)
-        # self.obj3_pos_delta = torch.tensor(cfg["env"]["obj3_pos_delta"], dtype=torch.float, device=self.device)
-        
         # Goal height
         self.goal_height = torch.tensor(cfg["env"]["goal_height"], dtype=torch.float, device=self.device)
 
@@ -214,7 +204,7 @@ class FrankaPickObject(BaseTask):
         asset_root = self.cfg["env"]["asset"]["assetRoot"]
         franka_asset_file = self.cfg["env"]["asset"]["assetFileNameFranka"]
 
-        # Load franka /home/nayeshagandotra/nayesha/IsaacGymEnvs/mvp/assets/urdf/franka_descriptionasset
+        # Load franka asset
         asset_options = gymapi.AssetOptions()
         asset_options.flip_visual_attachments = True
         asset_options.fix_base_link = True
@@ -226,9 +216,7 @@ class FrankaPickObject(BaseTask):
         franka_asset = self.gym.load_asset(self.sim, asset_root, franka_asset_file, asset_options)
 
         # Create table asset
-        # table_dims = gymapi.Vec3(0.6, 1.0, 0.4)
-        table_dims = gymapi.Vec3(1.5, 1.5, 0.4) #make table bigger to support multiple objects
-
+        table_dims = gymapi.Vec3(0.6, 1.0, 0.4)
         asset_options = gymapi.AssetOptions()
         asset_options.fix_base_link = True
         table_asset = self.gym.create_box(self.sim, table_dims.x, table_dims.y, table_dims.z, asset_options)
@@ -245,18 +233,11 @@ class FrankaPickObject(BaseTask):
             object_size = 0.045
             object_asset = self.gym.create_box(self.sim, object_size, object_size, object_size, asset_options)
 
-        #create other objects
-        obj2_asset_file = self.obj_asset_files["can"]
-        obj2_asset = self.gym.load_asset(self.sim, asset_root, obj2_asset_file, asset_options)
-
-        # obj3_asset_file = self.obj_asset_files["cracker_box"]
-        # obj3_asset = self.gym.load_asset(self.sim, asset_root, obj3_asset_file, asset_options)
-        
         self.num_franka_bodies = self.gym.get_asset_rigid_body_count(franka_asset)
         self.num_franka_dofs = self.gym.get_asset_dof_count(franka_asset)
 
-        # print("num franka bodies: ", self.num_franka_bodies)
-        # print("num franka dofs: ", self.num_franka_dofs)
+        print("num franka bodies: ", self.num_franka_bodies)
+        print("num franka dofs: ", self.num_franka_dofs)
 
         # Franka dof gains (should probably be in the config)
         franka_dof_stiffness = [400, 400, 400, 400, 400, 400, 400, 1.0e6, 1.0e6]
@@ -294,18 +275,6 @@ class FrankaPickObject(BaseTask):
         object_start_pose.p = gymapi.Vec3(0.5, 0.0, table_dims.z + object_offset)
         self.object_z_init = object_start_pose.p.z
 
-        #init other objects
-        obj2_offset = self.obj_offsets["can"]
-        obj2_start_pose = gymapi.Transform()
-        #why is this not obj2_pos_init from the config file?
-        obj2_start_pose.p = gymapi.Vec3(0.2, 0.1, table_dims.z + obj2_offset)
-        self.obj2_z_init = obj2_start_pose.p.z
-
-        # obj3_offset = self.obj_offsets["cracker_box"]
-        # obj3_start_pose = gymapi.Transform()
-        # obj3_start_pose.p = gymapi.Vec3(0.5, 0.0, table_dims.z + obj3_offset)
-        # self.obj3_z_init = obj3_start_pose.p.z
-
         # Compute aggregate size
         num_franka_bodies = self.gym.get_asset_rigid_body_count(franka_asset)
         num_franka_shapes = self.gym.get_asset_rigid_shape_count(franka_asset)
@@ -313,18 +282,12 @@ class FrankaPickObject(BaseTask):
         num_table_shapes = self.gym.get_asset_rigid_shape_count(table_asset)
         num_object_bodies = self.gym.get_asset_rigid_body_count(object_asset)
         num_object_shapes = self.gym.get_asset_rigid_shape_count(object_asset)
-        num_obj2_bodies = self.gym.get_asset_rigid_body_count(obj2_asset)
-        num_obj2_shapes = self.gym.get_asset_rigid_shape_count(obj2_asset)
-        # num_obj3_bodies = self.gym.get_asset_rigid_body_count(obj3_asset)
-        # num_obj3_shapes = self.gym.get_asset_rigid_shape_count(obj3_asset)
-        max_agg_bodies = num_franka_bodies + num_table_bodies + num_object_bodies + num_obj2_bodies #+ num_obj3_bodies
-        max_agg_shapes = num_franka_shapes + num_table_shapes + num_object_shapes + num_obj2_shapes #+ num_obj3_shapes
+        max_agg_bodies = num_franka_bodies + num_table_bodies + num_object_bodies
+        max_agg_shapes = num_franka_shapes + num_table_shapes + num_object_shapes
 
         self.frankas = []
         self.tables = []
         self.objects = []
-        self.obj2s = []
-        # self.obj3s = []
         self.envs = []
 
         if self.obs_type == "pixels":
@@ -334,7 +297,7 @@ class FrankaPickObject(BaseTask):
         for i in range(self.num_envs):
             # Create env instance
             env_ptr = self.gym.create_env(self.sim, lower, upper, num_per_row)
-            
+
             # Aggregate actors
             self.gym.begin_aggregate(env_ptr, max_agg_bodies, max_agg_shapes, True)
 
@@ -351,16 +314,6 @@ class FrankaPickObject(BaseTask):
                 object_color = self.obj_colors[self.obj_type]
                 self.gym.set_rigid_body_color(env_ptr, object_actor, 0, gymapi.MESH_VISUAL_AND_COLLISION, object_color)
 
-            # #create actors for other objects
-            obj2_actor = self.gym.create_actor(env_ptr, obj2_asset, obj2_start_pose, "object2", i, 0, 0)
-            # print(f"successfully created actor for obj2 {obj2_actor}")
-            obj2_color = self.obj_colors["can"]
-            self.gym.set_rigid_body_color(env_ptr, obj2_actor, 0, gymapi.MESH_VISUAL_AND_COLLISION, obj2_color)
-
-            # obj3_actor = self.gym.create_actor(env_ptr, obj3_asset, obj3_start_pose, "object3", i, 0, 0)
-            # obj3_color = self.obj_colors["cracker_box"]
-            # self.gym.set_rigid_body_color(env_ptr, obj3_actor, 0, gymapi.MESH_VISUAL_AND_COLLISION, obj3_color)
-
             self.gym.end_aggregate(env_ptr)
 
             # TODO: move up
@@ -368,9 +321,6 @@ class FrankaPickObject(BaseTask):
             self.frankas.append(franka_actor)
             self.tables.append(table_actor)
             self.objects.append(object_actor)
-            self.obj2s.append(obj2_actor)
-            # self.obj3s.append(obj3_actor)
-
 
             # Set up camera
             if self.obs_type == "pixels":
@@ -398,20 +348,12 @@ class FrankaPickObject(BaseTask):
                 cam_tensor_th = gymtorch.wrap_tensor(cam_tensor)
                 self.cam_tensors.append(cam_tensor_th)
 
-            
-
         self.rigid_body_lfinger_ind = self.gym.find_actor_rigid_body_handle(env_ptr, franka_actor, "panda_leftfinger")
         self.rigid_body_rfinger_ind = self.gym.find_actor_rigid_body_handle(env_ptr, franka_actor, "panda_rightfinger")
 
         self.env_franka_ind = self.gym.get_actor_index(env_ptr, franka_actor, gymapi.DOMAIN_ENV)
-        print(f"franka index is {self.env_franka_ind}")
         self.env_table_ind = self.gym.get_actor_index(env_ptr, table_actor, gymapi.DOMAIN_ENV)
-        print(f"table index is {self.env_table_ind}")
         self.env_object_ind = self.gym.get_actor_index(env_ptr, object_actor, gymapi.DOMAIN_ENV)
-        print(f"object1 index is {self.env_object_ind}")
-        self.env_obj2_ind = self.gym.get_actor_index(env_ptr, obj2_actor, gymapi.DOMAIN_ENV)
-        print(f"obj2 index is {self.env_obj2_ind}")
-        # self.env_obj3_ind = self.gym.get_actor_index(env_ptr, obj3_actor, gymapi.DOMAIN_ENV)
 
         franka_rigid_body_names = self.gym.get_actor_rigid_body_names( env_ptr, franka_actor)
         franka_arm_body_names = [name for name in franka_rigid_body_names if "link" in name]
@@ -419,7 +361,6 @@ class FrankaPickObject(BaseTask):
         self.rigid_body_arm_inds = torch.zeros(len(franka_arm_body_names), dtype=torch.long, device=self.device)
         for i, n in enumerate(franka_arm_body_names):
             self.rigid_body_arm_inds[i] = self.gym.find_actor_rigid_body_handle(env_ptr, franka_actor, n)
-        print(f"rigid body indices for franka arm are {self.rigid_body_arm_inds}")
 
         self.init_grasp_pose()
 
@@ -437,9 +378,7 @@ class FrankaPickObject(BaseTask):
         self.rfinger_grasp_rot = torch.zeros_like(self.local_finger_grasp_rot)
         self.rfinger_grasp_rot[..., 3] = 1.0
 
-
     def compute_reward(self, actions):
-    #   self.compute_collisions()
       self.rew_buf[:], self.reset_buf[:], self.successes[:] = compute_franka_reward(
             self.reset_buf, self.progress_buf, self.successes, self.actions,
             self.lfinger_grasp_pos, self.rfinger_grasp_pos, self.object_pos, self.to_height,
@@ -452,7 +391,6 @@ class FrankaPickObject(BaseTask):
 
         # Franka multi env ids
         franka_multi_env_ids_int32 = self.global_indices[env_ids, self.env_franka_ind].flatten()
-        print(f" franka ids are {franka_multi_env_ids_int32}")
 
         # Reset franka dofs
         dof_pos_noise = torch.rand((len(env_ids), self.num_franka_dofs), device=self.device)
@@ -479,7 +417,6 @@ class FrankaPickObject(BaseTask):
 
         # Object multi env ids
         object_multi_env_ids_int32 = self.global_indices[env_ids, self.env_object_ind].flatten()
-        print(f"object i32 handle stuff is {object_multi_env_ids_int32} and {len(object_multi_env_ids_int32)}")
 
         # Reset object pos
         delta_x = torch_rand_float(
@@ -498,15 +435,6 @@ class FrankaPickObject(BaseTask):
         self.root_state_tensor[env_ids, self.env_object_ind, 6] = 1.0
         self.root_state_tensor[env_ids, self.env_object_ind, 7:10] = 0.0
         self.root_state_tensor[env_ids, self.env_object_ind, 10:13] = 0.0
-
-        #reset object2 position HOW TO RANDOMIZE?
-        self.root_state_tensor[env_ids, self.env_obj2_ind, 0] = self.obj2_pos_init[0] + delta_x
-        self.root_state_tensor[env_ids, self.env_obj2_ind, 1] = self.obj2_pos_init[1] + delta_y
-        self.root_state_tensor[env_ids, self.env_obj2_ind, 2] = self.obj2_z_init
-        self.root_state_tensor[env_ids, self.env_obj2_ind, 3:6] = 0.0
-        self.root_state_tensor[env_ids, self.env_obj2_ind, 6] = 1.0
-        self.root_state_tensor[env_ids, self.env_obj2_ind, 7:10] = 0.0
-        self.root_state_tensor[env_ids, self.env_obj2_ind, 10:13] = 0.0
 
         self.gym.set_actor_root_state_tensor_indexed(
             self.sim,
@@ -555,7 +483,6 @@ class FrankaPickObject(BaseTask):
         self.obs_buf[:, self.num_franka_dofs:] = self.franka_dof_vel_scaled
 
     def compute_oracle_obs(self):
-        # self.compute_collisions()
         self.obs_buf[:] = torch.cat((
             self.franka_dof_pos_scaled, self.franka_dof_vel_scaled,
             self.lfinger_grasp_pos, self.rfinger_grasp_pos, self.object_pos,
@@ -564,7 +491,6 @@ class FrankaPickObject(BaseTask):
 
     def compute_pixel_obs(self):
         self.gym.render_all_camera_sensors(self.sim)
-        # print("yay!") 
         self.gym.start_access_image_tensors(self.sim)
         for i in range(self.num_envs):
             crop_l = (self.cam_w - self.im_size) // 2
@@ -572,26 +498,6 @@ class FrankaPickObject(BaseTask):
             self.obs_buf[i] = self.cam_tensors[i][:, crop_l:crop_r, :3].permute(2, 0, 1).float() / 255.
             self.obs_buf[i] = (self.obs_buf[i] - self.im_mean) / self.im_std
         self.gym.end_access_image_tensors(self.sim)
-
-    def compute_collisions(self):
-        """
-        Ideally this takes in the environment info of the sim and returns
-        the list of RigidContacts, which can then be used to detect collision. 
-        This should be called during the compute reward function to get
-        a collision list/matrix type thing, which can then be used to compute reward.
-
-        This function can be called after the compute observations function and the updated list
-        can be passed into the reward calculation function
-        """
-
-        #create a list of rigid contacts for each environment
-        for env in self.envs:
-            #set up collision info
-            num_rigid_bodies = self.gym.get_env_rigid_body_count(env)
-            contacts = self.gym.get_env_rigid_contacts(env)
-            print(f"env contact is {contacts}")           
-            # contacts = self.contacts[env]
-            # print(f"env contact is {contacts}")
 
     def post_physics_step(self):
         self.progress_buf += 1
@@ -608,7 +514,6 @@ class FrankaPickObject(BaseTask):
         self.compute_task_state()
         self.compute_robot_state()
         self.compute_observations()
-        self.compute_collisions()
         self.compute_reward(self.actions)
 
 

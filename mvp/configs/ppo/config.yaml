@@ -1,18 +1,16 @@
 
 physics_engine: "physx"
-pipeline: "cpu"
-# sim_device: "cuda:0"
-# rl_device: "cuda:0"
-sim_device: "cpu"
+pipeline: "gpu"
+sim_device: "cuda:0"
 rl_device: "cuda:0"
 graphics_device_id: 0
 num_gpus: 1
 
 test: False
 resume: 0
-logdir: "~"
+logdir: "logdir"
 cptdir: ""
-headless: False
+headless: True
 
 defaults:
   - task: FrankaPick

@@ -224,7 +224,6 @@ def process_ppo(env, cfg, cfg_dict, logdir, cptdir):
 
 def dump_cfg(cfg, logdir):
     out_f = os.path.join(logdir, "config.yaml")
-    print(f"out f is {out_f}")
     with open(out_f, "w") as f:
         f.write(OmegaConf.to_yaml(cfg))
     print("Wrote config to: {}".format(out_f))
